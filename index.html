@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Monitor de Frecuencia Cardíaca BLE v4.0 (PWA)</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root { --c-z1:#2563eb; --c-z2:#059669; --c-z3:#fbbf24; --c-z4:#fb923c; }
+    body { font-family:'Inter',sans-serif; background:#000; color:#fff; }
+    button { transition: background-color .3s, transform .1s; }
+    button:active { transform: scale(.98); }
+    .btn-main { width:100%; padding:.85em 0; border-radius:1em; font-weight:600; margin-top:1em; }
+
+    .zone-btns-row { display:flex; flex-direction:row; gap:.5em; justify-content:center; align-items:center; margin-bottom:.8em; }
+    .zone-btn { border-radius:.9em; padding:.35em .9em; font-size:1.1rem; font-weight:700; border:2.5px solid #fff2; background:#23272f; color:#fff; transition:all .18s; cursor:pointer; outline:none; }
+    .zone-btn.z1 { border-color: var(--c-z1); } .zone-btn.z2 { border-color: var(--c-z2); }
+    .zone-btn.z3 { border-color: var(--c-z3); } .zone-btn.z4 { border-color: var(--c-z4); }
+    .zone-btn.active.z1 { background:var(--c-z1); color:#fff; } .zone-btn.active.z2 { background:var(--c-z2); color:#fff; }
+    .zone-btn.active.z3 { background:var(--c-z3); color:#1a1a1a; } .zone-btn.active.z4 { background:var(--c-z4); color:#fff; }
+    .zone-desc { display:block; font-size:1.05rem; text-align:center; margin-bottom:.8em; color:#e0e0e0; }
+
+    @keyframes pulsate { 0%{transform:scale(1);} 50%{transform:scale(1.15);} 100%{transform:scale(1);} }
+    .heartbeat-animation { animation: pulsate 1s infinite ease-in-out; }
+
+    .timer-box { font-family:'Inter',monospace; font-size:2.5rem; font-weight:700; color:#06b6d4; margin-bottom:.8em; letter-spacing:.04em; }
+    .controls-row { display:flex; flex-direction:row; gap:1.2rem; justify-content:center; align-items:center; }
+    .circle-btn { width:3.1rem; height:3.1rem; border-radius:9999px; display:flex; align-items:center; justify-content:center; border:none; outline:none; cursor:pointer; position:relative; }
+    .circle-btn svg { width:1.8rem; height:1.8rem; }
+    .btn-play { background:#16a34a; } .btn-pause { background:#dc2626; } .btn-reset { background:#6b7280; }
+    .btn-play:hover{ background:#15803d;} .btn-pause:hover{ background:#991b1b;} .btn-reset:hover{ background:#334155;}
+    .circle-btn.btn-reset.confirming{ background:#dc2626 !important;} .circle-btn.btn-reset.confirming:hover{ background:#991b1b !important;}
+
+    .fullscreen-flex-vertical { width:100vw; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; }
+    .hr-container { width:100vw; display:flex; justify-content:center; align-items:center; position:relative; }
+    .controls-container { width:100vw; display:flex; flex-direction:column; align-items:center; }
+    .hr-size-proto { opacity:0; position:absolute; left:0; top:0; pointer-events:none; user-select:none; z-index:-1; }
+    #fullscreenHeartRateVisible { font-weight:800; font-size:inherit; line-height:1; text-align:center; word-break:break-all; white-space:nowrap; letter-spacing:-.02em; margin:0; padding:0; overflow:hidden; display:block; z-index:1; user-select:none; transition: color .2s; }
+
+    .hr-blue{color:var(--c-z1)!important;} .hr-green{color:var(--c-z2)!important;}
+    .hr-yellow{color:var(--c-z3)!important;} .hr-orange{color:var(--c-z4)!important;} .hr-red{color:#ef4444!important;}
+
+    .indicador-flecha { display:inline-flex; align-items:center; justify-content:center; margin-left:2vw; font-size:3rem; font-weight:700; transition:all .18s; color:#f59e42; text-shadow:0 2px 9px #0007; opacity:1; min-width:2.7rem; height:2.7rem; user-select:none; }
+    .indicador-flecha.arriba{color:#f87171;} .indicador-flecha.abajo{color:#60a5fa;} .indicador-flecha.ok{opacity:0; transform:scale(.5);}
+
+    @media (orientation: landscape) {
+      .fullscreen-flex-vertical { flex-direction:row; align-items:stretch; gap:0; }
+      .controls-container { width:45vw; max-width:400px; min-width:260px; height:100vh; justify-content:center; align-items:center; padding-right:1vw; padding-left:1vw; }
+      .hr-container { width:55vw; min-width:340px; height:100vh; justify-content:flex-start; align-items:center; }
+      .zone-btns-row { margin-bottom:.6em; }
+      .zone-btn { padding:.3em .8em; font-size:1rem; }
+      .timer-box { font-size:2.2rem; margin-bottom:.6em; }
+      .controls-row { gap:1rem; }
+      .circle-btn { width:2.8rem; height:2.8rem; }
+      .circle-btn svg { width:1.6rem; height:1.6rem; }
+    }
+
+    .result-msg { background:#18181b; color:#fafafa; border-radius:1.2rem; padding:1.1em 1.5em; font-size:1.25rem; font-weight:500; margin:.9em auto 0 auto; max-width:95vw; box-shadow:0 2px 16px #0006; border:1.7px solid #444; text-align:center; }
+
+    #fullscreenContainer { display:none !important; }
+    #fullscreenContainer.active { display:flex !important; position:fixed; inset:0; background:#000; z-index:50; }
+
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:none; align-items:center; justify-content:center; z-index:100; }
+    .modal-overlay.active { display:flex; }
+    .modal-content { background:#1e1e1e; padding:2rem; border-radius:1.5rem; border:1px solid #444; width:90vw; max-width:500px; }
+    .modal-content h2 { font-size:1.8rem; font-weight:700; margin-bottom:1.5rem; text-align:center; }
+    .modal-input { background:#333; border:1px solid #555; color:#fff; border-radius:.5em; padding:.5em .8em; width:100%; }
+    .modal-input:focus { outline:none; border-color:var(--c-z1); }
+
+    .snackbar { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#111827; color:#e5e7eb; padding:10px 14px; border-radius:12px; border:1px solid #374151; box-shadow:0 6px 22px rgba(0,0,0,.35); font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s; z-index:80; }
+    .snackbar.show { opacity:1; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+  <div class="w-full max-w-md bg-black rounded-2xl shadow-lg p-8 space-y-6 text-center relative z-10">
+    <header>
+      <h1 class="text-3xl font-bold text-white">Monitor de Ritmo Cardíaco</h1>
+      <div class="text-gray-400 mt-1 mb-4 text-sm">v 4.0 — PWA</div>
+      <p class="text-gray-400 mt-2 mb-2">Conéctate a tu banda de frecuencia cardíaca BLE.</p>
+    </header>
+
+    <div class="border border-gray-700 rounded-lg p-6 bg-gray-900">
+      <div class="flex justify-center items-center mb-4">
+        <svg id="heartIcon" class="w-16 h-16 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path>
+        </svg>
+      </div>
+      <div id="heartRateDisplay" class="text-7xl font-bold text-white tracking-tight" aria-live="polite">--</div>
+      <div class="text-lg text-gray-400">BPM</div>
+      <p id="bluetoothStatus" class="mt-4 text-sm text-gray-400 h-5" role="status">Estado: Desconectado</p>
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <button id="fullscreenBtn" class="btn-main bg-white text-black hover:bg-gray-100">Pantalla Completa</button>
+      <button id="editZonesBtn" class="btn-main bg-gray-700 text-white hover:bg-gray-600">Editar Zonas</button>
+      <button id="disconnectBluetooth" class="btn-main bg-gray-800 text-white hover:bg-gray-700 disabled:bg-gray-600" disabled>Desconectar</button>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <button id="connectBluetooth" class="btn-main bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400">Conectar a Sensor</button>
+      <!-- Botón de instalación PWA -->
+      <button id="installBtn" class="btn-main bg-emerald-600 text-white hover:bg-emerald-700 hidden">Instalar app</button>
+    </div>
+
+    <div id="resultMsg" class="result-msg" style="display:none;"></div>
+  </div>
+
+  <div id="fullscreenContainer">
+    <div class="fullscreen-flex-vertical w-full h-full">
+      <div class="controls-container">
+        <div class="zone-btns-row" id="zoneBtnsRow"></div>
+        <span id="zoneDesc" class="zone-desc"></span>
+        <time id="sessionTime" class="timer-box">00:00:00</time>
+
+        <div class="controls-row mb-3">
+          <button class="circle-btn bg-gray-700 hover:bg-gray-600" id="addMinus10sBtn" title="Restar 10s" aria-label="Restar 10 segundos"><span class="font-bold">−10s</span></button>
+          <button class="circle-btn bg-gray-700 hover:bg-gray-600" id="add10sBtn" title="Sumar 10s" aria-label="Sumar 10 segundos"><span class="font-bold">+10s</span></button>
+          <button class="circle-btn bg-gray-700 hover:bg-gray-600" id="add30sBtn" title="Sumar 30s" aria-label="Sumar 30 segundos"><span class="font-bold">+30s</span></button>
+          <button class="circle-btn bg-gray-700 hover:bg-gray-600" id="add1mBtn" title="Sumar 1 minuto" aria-label="Sumar un minuto"><span class="font-bold">+1m</span></button>
+        </div>
+
+        <div class="controls-row mt-2 mb-8">
+          <!-- Toggle Play/Pause -->
+          <button id="sessionToggleBtn" class="circle-btn btn-play" title="Iniciar" aria-label="Iniciar sesión" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="10,8 16,12 10,16" fill="#fff"/></svg>
+          </button>
+          <!-- Reset con confirmación -->
+          <button id="resetSessionBtn" class="circle-btn btn-reset" title="Reiniciar" aria-label="Reiniciar Sesión">
+            <svg viewBox="0 0 24 24" stroke="#fff" stroke-width="2" fill="none"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="6"/></svg>
+          </button>
+          <!-- Exportar CSV -->
+          <button id="exportCsvBtn" class="circle-btn bg-sky-700 hover:bg-sky-600" title="Exportar CSV" aria-label="Exportar datos de sesión a CSV">
+            <svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M5 20h14a1 1 0 0 0 1-1v-7h-2v6H6v-6H4v7a1 1 0 0 0 1 1zm7-3l5-5h-3V4h-4v8H7l5 5z"/></svg>
+          </button>
+        </div>
+
+        <button id="exitFullscreenBtn" class="mt-2 bg-gray-800 text-white px-10 py-5 rounded-xl text-2xl hover:bg-gray-900">Salir</button>
+      </div>
+
+      <div class="hr-container" id="hrTouchArea">
+        <span id="fullscreenHeartRateProto" class="hr-size-proto" aria-hidden="true">188</span>
+        <span id="fullscreenHeartRateVisible">--</span>
+        <span id="indicadorFlecha" class="indicador-flecha"></span>
+      </div>
+
+      <div id="snackbar" class="snackbar" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div id="zoneEditorModal" class="modal-overlay">
+    <div class="modal-content space-y-4">
+      <h2>Editar Zonas de Frecuencia</h2>
+      <div class="grid grid-cols-3 gap-4 items-center">
+        <label for="userAge" class="text-right font-semibold">Tu Edad:</label>
+        <input type="number" id="userAge" class="modal-input col-span-1" placeholder="Ej: 30" min="10" max="100" step="1">
+        <button id="calculateZonesBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Calcular</button>
+      </div>
+      <div id="zoneInputsContainer" class="space-y-3 pt-4"></div>
+      <div class="flex justify-end space-x-4 pt-4">
+        <button id="closeModalBtn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg">Cerrar</button>
+        <button id="saveZonesBtn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded-lg">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Registro del Service Worker (PWA) ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
+      });
+    }
+
+    // --- Botón de instalación (PWA) ---
+    let deferredPrompt = null;
+    const installBtn = document.getElementById('installBtn');
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.classList.remove('hidden');
+    });
+    installBtn?.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      installBtn.classList.add('hidden');
+    });
+
+    // --- Variables globales y constantes ---
+    let heartRateCharacteristic = null, bleDevice = null, wakeLock = null;
+    let lastHR = null, zoneActual = 1;
+    let sessionInterval = null, sessionStart = null, sessionElapsed = 0, sessionRunning = false, secondsInZone = 0;
+    let hrHistory = [], maxHRInSession = 0, hrSum = 0;
+    let hrSamples = []; // {t, hr}
+
+    let ZONAS = [
+      { id:1, nombre:"Zona 1", rango:"94–113 bpm",  min:94,  max:113, label:"Z1" },
+      { id:2, nombre:"Zona 2", rango:"113–132 bpm", min:113, max:132, label:"Z2" },
+      { id:3, nombre:"Zona 3", rango:"132–150 bpm", min:132, max:150, label:"Z3" },
+      { id:4, nombre:"Zona 4", rango:"150–169 bpm", min:150, max:169, label:"Z4" },
+    ];
+    const HR_ZONES_CLASSES = ['hr-blue','hr-green','hr-yellow','hr-orange','hr-red'];
+
+    const SVG_PLAY  = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="10,8 16,12 10,16" fill="#fff"/></svg>';
+    const SVG_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="9" y="8" width="2" height="8" rx="1" fill="#fff"/><rect x="13" y="8" width="2" height="8" rx="1" fill="#fff"/></svg>';
+
+    // --- Cacheo de Elementos del DOM ---
+    const ui = {
+      connectBtn: document.getElementById('connectBluetooth'),
+      disconnectBtn: document.getElementById('disconnectBluetooth'),
+      statusElem: document.getElementById('bluetoothStatus'),
+      hrDisplay: document.getElementById('heartRateDisplay'),
+      heartIcon: document.getElementById('heartIcon'),
+      fullscreenBtn: document.getElementById('fullscreenBtn'),
+      fullscreenContainer: document.getElementById('fullscreenContainer'),
+      exitFullscreenBtn: document.getElementById('exitFullscreenBtn'),
+      resultMsg: document.getElementById('resultMsg'),
+      sessionTime: document.getElementById('sessionTime'),
+      toggleBtn: document.getElementById('sessionToggleBtn'),
+      resetBtn: document.getElementById('resetSessionBtn'),
+      exportCsvBtn: document.getElementById('exportCsvBtn'),
+      hrProto: document.getElementById('fullscreenHeartRateProto'),
+      hrVisible: document.getElementById('fullscreenHeartRateVisible'),
+      arrow: document.getElementById('indicadorFlecha'),
+      zoneBtnsRow: document.getElementById('zoneBtnsRow'),
+      zoneDesc: document.getElementById('zoneDesc'),
+      editZonesBtn: document.getElementById('editZonesBtn'),
+      zoneEditorModal: document.getElementById('zoneEditorModal'),
+      closeModalBtn: document.getElementById('closeModalBtn'),
+      saveZonesBtn: document.getElementById('saveZonesBtn'),
+      calculateZonesBtn: document.getElementById('calculateZonesBtn'),
+      userAgeInput: document.getElementById('userAge'),
+      zoneInputsContainer: document.getElementById('zoneInputsContainer'),
+      addMinus10sBtn: document.getElementById('addMinus10sBtn'),
+      add10sBtn: document.getElementById('add10sBtn'),
+      add30sBtn: document.getElementById('add30sBtn'),
+      add1mBtn: document.getElementById('add1mBtn'),
+      snackbar: document.getElementById('snackbar'),
+      hrTouchArea: document.getElementById('hrTouchArea'),
+    };
+
+    // ---- Lógica de la aplicación ----
+    function openZoneEditor() {
+      let inputsHtml = '';
+      ZONAS.forEach(z => {
+        inputsHtml += `<div class="grid grid-cols-4 gap-2 items-center">
+          <label class="text-right font-semibold pr-2">${z.label}:</label>
+          <input type="number" data-zone-id="${z.id}" data-type="min" class="modal-input" value="${z.min}">
+          <input type="number" data-zone-id="${z.id}" data-type="max" class="modal-input" value="${z.max}">
+          <span class="text-xs text-gray-400 pl-1">bpm</span>
+        </div>`;
+      });
+      ui.zoneInputsContainer.innerHTML = inputsHtml;
+      ui.zoneEditorModal.classList.add('active');
+    }
+    function closeZoneEditor(){ ui.zoneEditorModal.classList.remove('active'); }
+    function saveZones(){
+      const inputs = ui.zoneInputsContainer.querySelectorAll('input');
+      inputs.forEach(input=>{
+        const zoneId = parseInt(input.dataset.zoneId,10);
+        const type = input.dataset.type;
+        const value = parseInt(input.value,10);
+        const zone = ZONAS.find(z=>z.id===zoneId);
+        if(zone && !isNaN(value)){ zone[type]=value; zone.rango = `${zone.min}–${zone.max} bpm`; }
+      });
+      localStorage.setItem('customHeartRateZones', JSON.stringify(ZONAS));
+      updateZoneVisuals();
+      closeZoneEditor();
+    }
+    function loadCustomZones(){ const saved = localStorage.getItem('customHeartRateZones'); if(saved){ ZONAS = JSON.parse(saved); } }
+    function calculateZonesByAge(){
+      const age = parseInt(ui.userAgeInput.value,10);
+      if(isNaN(age)||age<10||age>100){ alert("Por favor, introduce una edad válida."); return; }
+      const mhr = 220 - age;
+      const zonePercentages = [
+        {min:.5, max:.6}, {min:.6, max:.7}, {min:.7, max:.8}, {min:.8, max:.9}
+      ];
+      ui.zoneInputsContainer.querySelectorAll('input').forEach(input=>{
+        const zoneId = parseInt(input.dataset.zoneId,10);
+        const type = input.dataset.type;
+        const p = zonePercentages[zoneId-1][type];
+        input.value = Math.round(mhr * p);
+      });
+    }
+
+    function updateZoneDesc(){ const z = ZONAS.find(x=>x.id==zoneActual); if(z) ui.zoneDesc.innerHTML = `<b>${z.nombre}</b>: <span style="font-weight:700">${z.rango}</span>`; }
+    function updateZoneVisuals(){
+      ui.zoneBtnsRow.innerHTML = '';
+      ZONAS.forEach(z=>{
+        const btn = document.createElement("button");
+        btn.className = `zone-btn z${z.id}`;
+        btn.textContent = z.label;
+        btn.title = `${z.nombre} (${z.rango})`;
+        btn.dataset.zoneId = z.id;
+        if(z.id===zoneActual) btn.classList.add("active");
+        ui.zoneBtnsRow.appendChild(btn);
+      });
+      updateZoneDesc();
+    }
+
+    function formatDuration(ms){
+      const totalSeconds = Math.floor(ms/1000);
+      const h = Math.floor(totalSeconds/3600);
+      const m = Math.floor((totalSeconds%3600)/60);
+      const s = totalSeconds%60;
+      return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function tryVibrate(pattern){
+      if(!('vibrate' in navigator)) return;
+      if(document.visibilityState!=='visible') return;
+      const did = navigator.vibrate(pattern);
+      if(!did && ui.toggleBtn){
+        ui.toggleBtn.style.transform='scale(.9)';
+        setTimeout(()=>{ ui.toggleBtn.style.transform=''; },120);
+      }
+    }
+
+    function startSession(){
+      if(!sessionRunning){
+        sessionRunning = true;
+        sessionStart = Date.now() - sessionElapsed;
+        sessionInterval = setInterval(updateSessionTime, 1000);
+        reflectToggleUI();
+        tryVibrate(30);
+      }
+    }
+    function pauseSession(){
+      if(sessionRunning){
+        sessionRunning = false;
+        clearInterval(sessionInterval);
+        sessionElapsed = Date.now() - sessionStart;
+        reflectToggleUI();
+        tryVibrate([25,60,25]);
+      }
+    }
+    function toggleSession(){ sessionRunning ? pauseSession() : startSession(); }
+    function reflectToggleUI(){
+      if(sessionRunning){
+        ui.toggleBtn.classList.remove('btn-play'); ui.toggleBtn.classList.add('btn-pause');
+        ui.toggleBtn.setAttribute('title','Pausar'); ui.toggleBtn.setAttribute('aria-label','Pausar sesión');
+        ui.toggleBtn.setAttribute('aria-pressed','true');
+        ui.toggleBtn.innerHTML = SVG_PAUSE;
+      } else {
+        ui.toggleBtn.classList.remove('btn-pause'); ui.toggleBtn.classList.add('btn-play');
+        ui.toggleBtn.setAttribute('title','Iniciar'); ui.toggleBtn.setAttribute('aria-label','Iniciar sesión');
+        ui.toggleBtn.setAttribute('aria-pressed','false');
+        ui.toggleBtn.innerHTML = SVG_PLAY;
+      }
+    }
+    function resetSession(){
+      pauseSession();
+      sessionElapsed=0; secondsInZone=0; hrHistory=[]; hrSamples=[];
+      maxHRInSession=0; hrSum=0;
+      updateSessionTime();
+    }
+
+    // Reset con confirmación (doble toque en 3s)
+    let resetConfirming=false, resetConfirmTimeout=null;
+    function onResetClick_v38(){
+      if(!resetConfirming){
+        resetConfirming=true;
+        ui.resetBtn.classList.add('confirming');
+        ui.resetBtn.setAttribute('title','Toca de nuevo para REINICIAR (3s)');
+        ui.resetBtn.setAttribute('aria-label','Confirmar reinicio (toca de nuevo)');
+        clearTimeout(resetConfirmTimeout);
+        resetConfirmTimeout=setTimeout(cancelResetConfirm_v38,3000);
+      } else {
+        clearTimeout(resetConfirmTimeout);
+        resetConfirming=false;
+        ui.resetBtn.classList.remove('confirming');
+        ui.resetBtn.setAttribute('title','Reiniciar');
+        ui.resetBtn.setAttribute('aria-label','Reiniciar Sesión');
+        resetSession();
+      }
+    }
+    function cancelResetConfirm_v38(){
+      resetConfirming=false;
+      ui.resetBtn.classList.remove('confirming');
+      ui.resetBtn.setAttribute('title','Reiniciar');
+      ui.resetBtn.setAttribute('aria-label','Reiniciar Sesión');
+    }
+
+    function updateSessionTime(){
+      const currentElapsed = sessionRunning ? Date.now() - sessionStart : sessionElapsed;
+      ui.sessionTime.textContent = formatDuration(currentElapsed);
+      if(sessionRunning && lastHR && isInZone(lastHR)){ secondsInZone++; }
+    }
+
+    // Ajuste de tiempo manual
+    function adjustSessionTime(deltaMs){
+      if(sessionRunning){ sessionStart -= deltaMs; }
+      else { sessionElapsed = Math.max(0, sessionElapsed + deltaMs); }
+      updateSessionTime();
+      showSnack((deltaMs>=0?'+':'−') + formatDuration(Math.abs(deltaMs)) + ' aplicado');
+      tryVibrate(20);
+    }
+
+    // Snackbar
+    let snackTimer=null;
+    function showSnack(text){
+      if(!ui.snackbar) return;
+      ui.snackbar.textContent=text;
+      ui.snackbar.classList.add('show');
+      clearTimeout(snackTimer);
+      snackTimer=setTimeout(()=>ui.snackbar.classList.remove('show'),1000);
+    }
+
+    // Gestos táctiles: SOLO swipe vertical para cambiar zona (tap NO hace toggle)
+    let touchStartY=0, touchStartX=0, swiping=false;
+    const SWIPE_THRESHOLD=60;
+
+    function onTouchStart(e){
+      const t = e.touches ? e.touches[0] : e;
+      touchStartY=t.clientY; touchStartX=t.clientX; swiping=true;
+    }
+    function onTouchMove(e){ if(!swiping) return; }
+    function onTouchEnd(e){
+      if(!swiping) return;
+      swiping=false;
+      const t = e.changedTouches ? e.changedTouches[0] : e;
+      const dy = t.clientY - touchStartY;
+      const dx = Math.abs(t.clientX - touchStartX);
+
+      if(Math.abs(dy) > SWIPE_THRESHOLD && dx < 40){
+        if(dy < 0){ zoneActual = Math.min(ZONAS.length, zoneActual + 1); }
+        else {      zoneActual = Math.max(1, zoneActual - 1); }
+        updateZoneVisuals();
+        updateFullScreenHeartRate(lastHR ?? '--');
+        showSnack('Zona: ' + (ZONAS.find(z=>z.id===zoneActual)?.label || zoneActual));
+        tryVibrate(15);
+      } else {
+        // Tap en BPM: no hace nada (se eliminó el toggle play/pause)
+      }
+    }
+
+    // Exportar CSV
+    function exportCsv(){
+      const header='elapsed_ms,time_iso,bpm\n';
+      const base = (sessionStart && sessionRunning) ? sessionStart : (Date.now() - sessionElapsed);
+      const rows = hrSamples.map(s=>{
+        const elapsed = s.t - base;
+        return `${elapsed},${new Date(s.t).toISOString()},${s.hr}`;
+      }).join('\n');
+      const csv = header + rows;
+      const blob = new Blob([csv],{type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const filename = `hr_session_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`;
+      const a=document.createElement('a'); a.href=url; a.download=filename; a.style.display='none';
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); },1000);
+      showSnack('CSV exportado');
+    }
+
+    // BLE + Reconexión
+    let reconnectAttempts=0;
+    const MAX_RECONNECT=5;
+
+    async function connectToBluetooth(){
+      if(!navigator.bluetooth){
+        ui.statusElem.textContent='Error: Web Bluetooth no es compatible.';
+        ui.statusElem.classList.add('text-red-600');
+        return;
+      }
+      try{
+        ui.statusElem.textContent='Buscando sensor...';
+        ui.connectBtn.disabled=true;
+        bleDevice = await navigator.bluetooth.requestDevice({ filters:[{services:['heart_rate']}], optionalServices:['device_information'] });
+        await establishGattConnection(bleDevice);
+      }catch(error){
+        ui.statusElem.textContent=`Error: ${error.message}`;
+        ui.statusElem.classList.add('text-red-600');
+        ui.connectBtn.disabled=false;
+      }
+    }
+
+    async function establishGattConnection(device){
+      ui.statusElem.textContent=`Conectando a ${device.name || 'dispositivo'}...`;
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService('heart_rate');
+      heartRateCharacteristic = await service.getCharacteristic('heart_rate_measurement');
+      await heartRateCharacteristic.startNotifications();
+      heartRateCharacteristic.addEventListener('characteristicvaluechanged', handleHeartRateNotification);
+      ui.statusElem.textContent='¡Conectado! Escuchando latidos...';
+      ui.statusElem.classList.add('text-green-600');
+      ui.connectBtn.disabled=false;
+      ui.disconnectBtn.disabled=false;
+      reconnectAttempts=0;
+      if('wakeLock' in navigator){
+        try{ navigator.wakeLock.request('screen').then(lock=>wakeLock=lock); }catch(e){}
+      }
+    }
+
+    function handleHeartRateNotification(event){
+      const value = event.target.value;
+      const flags = value.getUint8(0);
+      const heartRate = (flags & 0x1) !== 0 ? value.getUint16(1,true) : value.getUint8(1);
+      lastHR = heartRate;
+      ui.hrDisplay.textContent = heartRate;
+
+      if(sessionRunning && heartRate>0){
+        hrHistory.push(heartRate);
+        hrSamples.push({ t:Date.now(), hr:heartRate });
+        hrSum += heartRate;
+        if(heartRate > maxHRInSession){ maxHRInSession = heartRate; }
+      }
+
+      updateFullScreenHeartRate(heartRate);
+
+      if(heartRate>0){
+        const animationDuration = 60/heartRate;
+        ui.heartIcon.style.animationDuration = `${animationDuration.toFixed(2)}s`;
+        ui.heartIcon.classList.add('heartbeat-animation');
+      } else {
+        ui.heartIcon.classList.remove('heartbeat-animation');
+      }
+    }
+
+    async function tryReconnect(){
+      if(!bleDevice || reconnectAttempts>=MAX_RECONNECT) return;
+      const delay = Math.min(16000, 1000 * Math.pow(2, reconnectAttempts));
+      reconnectAttempts++;
+      ui.statusElem.textContent=`Reconectando (intento ${reconnectAttempts}/${MAX_RECONNECT})...`;
+      await new Promise(r=>setTimeout(r,delay));
+      try{
+        if(bleDevice.gatt.connected) return;
+        await establishGattConnection(bleDevice);
+        showSnack('Reconectado');
+      }catch(e){
+        if(reconnectAttempts<MAX_RECONNECT) tryReconnect();
+        else ui.statusElem.textContent='No se pudo reconectar.';
+      }
+    }
+
+    function onDisconnected(){
+      ui.statusElem.textContent='Dispositivo desconectado.';
+      ui.statusElem.classList.remove('text-green-600');
+      ui.statusElem.classList.add('text-red-600');
+      ui.hrDisplay.textContent='--';
+      ui.disconnectBtn.disabled=true;
+      if(heartRateCharacteristic){
+        heartRateCharacteristic.removeEventListener('characteristicvaluechanged', handleHeartRateNotification);
+        heartRateCharacteristic=null;
+      }
+      updateFullScreenHeartRate('--');
+      lastHR=null;
+      tryReconnect();
+    }
+
+    function manualDisconnect(){ try{ if(bleDevice?.gatt?.connected) bleDevice.gatt.disconnect(); }catch(e){} }
+
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState==='visible' && 'wakeLock' in navigator){
+        try{ navigator.wakeLock.request('screen').then(lock=>wakeLock=lock); }catch(e){}
+      }
+    });
+
+    function isInZone(hr){ if(isNaN(hr)) return false; const z = ZONAS.find(x=>x.id==zoneActual); return z && hr>=z.min && hr<=z.max; }
+    function getIndicadorFlecha(hr){
+      if(isNaN(hr) || hr==='--') return 'ok';
+      const z = ZONAS.find(x=>x.id==zoneActual);
+      if(!z) return 'ok';
+      if(hr < z.min) return 'arriba';
+      if(hr > z.max) return 'abajo';
+      return 'ok';
+    }
+    function getZoneClass(hr){
+      if(isNaN(hr) || hr==='--') return '';
+      if(hr>=170) return 'hr-red';
+      const zone = ZONAS.find(z=>hr>=z.min && hr<=z.max);
+      if(zone) return `hr-${['blue','green','yellow','orange'][zone.id-1]}`;
+      return '';
+    }
+
+    function fitHeartRateFontSize(){
+      if(!ui.hrProto) return;
+      const media=window.matchMedia("(orientation: landscape)");
+      const boxW = window.innerWidth * (media.matches ? 0.53 : 0.95);
+      const boxH = window.innerHeight * (media.matches ? 0.93 : 0.33);
+      ui.hrProto.textContent='188';
+      ui.hrProto.style.fontSize='200px';
+      const rect = ui.hrProto.getBoundingClientRect();
+      const scale = Math.min(boxW/rect.width, boxH/rect.height, 1.17);
+      ui.hrVisible.style.fontSize = (200*scale)+'px';
+    }
+
+    function updateFullScreenHeartRate(bpm){
+      ui.hrVisible.textContent = bpm;
+      ui.hrVisible.classList.remove(...HR_ZONES_CLASSES);
+      const zoneClass = getZoneClass(bpm);
+      if(zoneClass) ui.hrVisible.classList.add(zoneClass);
+      const arrowType = getIndicadorFlecha(bpm);
+      ui.arrow.classList.remove('arriba','abajo','ok');
+      ui.arrow.classList.add(arrowType);
+      if(arrowType==='arriba'){ ui.arrow.innerHTML="&#8593;"; }
+      else if(arrowType==='abajo'){ ui.arrow.innerHTML="&#8595;"; }
+      else { ui.arrow.textContent=""; }
+      if(ui.fullscreenContainer.classList.contains('active')){ fitHeartRateFontSize(); }
+    }
+
+    function enterFullScreen(){
+      ui.resultMsg.style.display="none";
+      ui.fullscreenContainer.classList.add('active');
+      updateZoneVisuals();
+      setTimeout(fitHeartRateFontSize,50);
+      if(ui.fullscreenContainer.requestFullscreen) ui.fullscreenContainer.requestFullscreen();
+    }
+    function handleExitFullscreen(){
+      ui.fullscreenContainer.classList.remove('active');
+      if(sessionElapsed>0){
+        const avgHR = hrHistory.length>0 ? Math.round(hrSum/hrHistory.length) : 0;
+        const adherence = Math.round(secondsInZone/Math.max(1, Math.floor(sessionElapsed/1000))*100);
+        ui.resultMsg.innerHTML = `Duración: <b>${formatDuration(sessionElapsed)}</b> | En Zona: <b>${adherence}%</b><br>FC Prom: <b>${avgHR}</b> bpm | FC Max: <b>${maxHRInSession}</b> bpm`;
+        ui.resultMsg.style.display="block";
+      }
+    }
+    function exitFullScreen(){ if(document.fullscreenElement) document.exitFullscreen(); handleExitFullscreen(); }
+
+    // Inicialización y eventos
+    document.addEventListener('DOMContentLoaded', async ()=>{
+      loadCustomZones();
+      updateZoneVisuals();
+      updateFullScreenHeartRate('--');
+      ui.sessionTime.textContent="00:00:00";
+
+      ui.connectBtn.addEventListener('click', connectToBluetooth);
+      ui.disconnectBtn.addEventListener('click', manualDisconnect);
+      ui.exportCsvBtn.addEventListener('click', exportCsv);
+      ui.toggleBtn.addEventListener('click', toggleSession);
+      ui.resetBtn.addEventListener('click', onResetClick_v38);
+      ui.fullscreenBtn.addEventListener('click', enterFullScreen);
+      ui.exitFullscreenBtn.addEventListener('click', exitFullScreen);
+
+      ui.addMinus10sBtn.addEventListener('click', ()=>adjustSessionTime(-10*1000));
+      ui.add10sBtn.addEventListener('click', ()=>adjustSessionTime(10*1000));
+      ui.add30sBtn.addEventListener('click', ()=>adjustSessionTime(30*1000));
+      ui.add1mBtn.addEventListener('click', ()=>adjustSessionTime(60*1000));
+
+      document.addEventListener('keydown', (e)=>{ if(e.code==='Space'){ e.preventDefault(); toggleSession(); } });
+
+      ui.editZonesBtn.addEventListener('click', openZoneEditor);
+      ui.closeModalBtn.addEventListener('click', closeZoneEditor);
+      ui.saveZonesBtn.addEventListener('click', saveZones);
+      ui.calculateZonesBtn.addEventListener('click', calculateZonesByAge);
+
+      ui.zoneBtnsRow.addEventListener('click', (event)=>{
+        const clickedBtn = event.target.closest('.zone-btn');
+        if(!clickedBtn) return;
+        zoneActual = parseInt(clickedBtn.dataset.zoneId,10);
+        updateZoneVisuals();
+        updateFullScreenHeartRate(lastHR ?? '--');
+      });
+
+      window.addEventListener('resize', ()=>{ if(ui.fullscreenContainer.classList.contains('active')) fitHeartRateFontSize(); });
+      document.addEventListener('fullscreenchange', ()=>{ if(!document.fullscreenElement && ui.fullscreenContainer.classList.contains('active')){ handleExitFullscreen(); } });
+
+      // Gestos táctiles sobre el área de HR
+      ui.hrTouchArea.addEventListener('touchstart', onTouchStart, {passive:true});
+      ui.hrTouchArea.addEventListener('touchmove', onTouchMove, {passive:true});
+      ui.hrTouchArea.addEventListener('touchend', onTouchEnd);
+
+      // Re-descubrir dispositivos recordados (si el navegador lo soporta)
+      if(navigator.bluetooth && navigator.bluetooth.getDevices){
+        try{
+          const devices = await navigator.bluetooth.getDevices();
+          const candidate = devices.find(d=>d.gatt && !d.gatt.connected);
+          if(candidate){ bleDevice=candidate; showSnack('Dispositivo recordado disponible'); }
+        }catch(e){}
+      }
+
+      reflectToggleUI();
+    });
+  </script>
+</body>
+</html>
