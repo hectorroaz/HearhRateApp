@@ -5,7 +5,7 @@
    - Runtime (CDNs, fonts, etc.): stale-while-revalidate
 */
 
-const VERSION = 'v4.0.3';
+const VERSION = 'v4.0.4';
 const CACHE_CORE = `fc-ble-core-${VERSION}`;
 const CACHE_RUNTIME = `fc-ble-rt-${VERSION}`;
 
@@ -13,7 +13,7 @@ const CACHE_RUNTIME = `fc-ble-rt-${VERSION}`;
 const CORE_ASSETS = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'
 ];
@@ -47,7 +47,6 @@ const isNavigationRequest = (req) =>
 
 const isCoreAsset = (url) =>
   CORE_ASSETS.some((p) => {
-    // Normaliza: CORE_ASSETS son relativas al scope
     try {
       const full = new URL(p, self.registration.scope).href;
       return url.href === full || url.pathname.endsWith(p.replace('./', '/'));
@@ -60,26 +59,59 @@ const isCoreAsset = (url) =>
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Solo GET
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // 1) Navegación HTML (SPA): Network First -> fallback a index.html cacheado
+  // 1) Navegación HTML: Network First -> fallback a index.html
   if (sameOrigin && isNavigationRequest(request)) {
     event.respondWith(
       (async () => {
         try {
           const net = await fetch(request);
-          // Si es index.html, actualiza caché core
           if (url.pathname.endsWith('/') || url.pathname.endsWith('/index.html')) {
             const cache = await caches.open(CACHE_CORE);
             cache.put('./index.html', net.clone());
           }
           return net;
         } catch {
-          // Fallback a index.html del core (scope-correcto)
           const cache = await caches.open(CACHE_CORE);
           const cachedIndex =
-            (await cache.match('.
+            (await cache.match('./index.html')) ||
+            (await cache.match(self.registration.scope));
+          if (cachedIndex) return cachedIndex;
+          return new Response('Offline', {
+            status: 503,
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+          });
+        }
+      })()
+    );
+    return;
+  }
+
+  // 2) Core assets estáticos: Cache First
+  if (sameOrigin && isCoreAsset(url)) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request))
+    );
+    return;
+  }
+
+  // 3) Runtime (CDNs, fuentes, etc.): Stale-While-Revalidate
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_RUNTIME);
+      const cached = await cache.match(request);
+      const fetchPromise = fetch(request)
+        .then((resp) => {
+          try { cache.put(request, resp.clone()); } catch {}
+          return resp;
+        })
+        .catch(() => null);
+
+      return cached || (await fetchPromise) || new Response('', { status: 504 });
+    })()
+  );
+});
