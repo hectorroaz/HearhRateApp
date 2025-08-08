@@ -1,8 +1,8 @@
 {
   "name": "Monitor de FC BLE",
   "short_name": "FC BLE",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/fc-ble-pwa/?pwa=1",
+  "scope": "/fc-ble-pwa/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",
