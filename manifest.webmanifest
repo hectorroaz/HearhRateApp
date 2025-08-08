@@ -1,11 +1,9 @@
 {
   "name": "Monitor de FC BLE",
   "short_name": "FC BLE",
-  "description": "Monitor de ritmo cardíaco por Bluetooth LE con zonas, sesión y exportación CSV.",
-  "start_url": "/index.html",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
   "icons": [
