@@ -2,13 +2,22 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Monitor de Frecuencia Cardíaca BLE v4.0 (PWA)</title>
 
+  <!-- Redirección defensiva: obliga a /HearhRateApp/ al abrir instalada -->
+  <script>
+  (function () {
+    var BASE = "/HearhRateApp/";
+    var here = location.pathname;
+    if (!here.startsWith(BASE)) {
+      location.replace(BASE + (location.search || "") + (location.hash || ""));
+    }
+  })();
+  </script>
+
   <!-- PWA -->
-  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="manifest" href="./manifest.json?v=4">
   <meta name="theme-color" content="#000000" />
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -111,7 +120,6 @@
 
     <div class="grid grid-cols-2 gap-4">
       <button id="connectBluetooth" class="btn-main bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400">Conectar a Sensor</button>
-      <!-- Botón de instalación PWA -->
       <button id="installBtn" class="btn-main bg-emerald-600 text-white hover:bg-emerald-700 hidden">Instalar app</button>
     </div>
 
@@ -133,15 +141,12 @@
         </div>
 
         <div class="controls-row mt-2 mb-8">
-          <!-- Toggle Play/Pause -->
           <button id="sessionToggleBtn" class="circle-btn btn-play" title="Iniciar" aria-label="Iniciar sesión" aria-pressed="false">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><polygon points="10,8 16,12 10,16" fill="#fff"/></svg>
           </button>
-          <!-- Reset con confirmación -->
           <button id="resetSessionBtn" class="circle-btn btn-reset" title="Reiniciar" aria-label="Reiniciar Sesión">
             <svg viewBox="0 0 24 24" stroke="#fff" stroke-width="2" fill="none"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="6"/></svg>
           </button>
-          <!-- Exportar CSV -->
           <button id="exportCsvBtn" class="circle-btn bg-sky-700 hover:bg-sky-600" title="Exportar CSV" aria-label="Exportar datos de sesión a CSV">
             <svg viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M5 20h14a1 1 0 0 0 1-1v-7h-2v6H6v-6H4v7a1 1 0 0 0 1 1zm7-3l5-5h-3V4h-4v8H7l5 5z"/></svg>
           </button>
@@ -420,7 +425,7 @@
       snackTimer=setTimeout(()=>ui.snackbar.classList.remove('show'),1000);
     }
 
-    // Gestos táctiles: SOLO swipe vertical para cambiar zona (tap NO hace toggle)
+    // Gestos táctiles: SOLO swipe vertical (tap NO hace toggle)
     let touchStartY=0, touchStartX=0, swiping=false;
     const SWIPE_THRESHOLD=60;
 
@@ -444,7 +449,7 @@
         showSnack('Zona: ' + (ZONAS.find(z=>z.id===zoneActual)?.label || zoneActual));
         tryVibrate(15);
       } else {
-        // Tap en BPM: no hace nada (se eliminó el toggle play/pause)
+        // Tap en BPM: no hace nada
       }
     }
 
