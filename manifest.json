@@ -1,7 +1,8 @@
 {
+  "id": "/HearhRateApp/pwa-v4",
   "name": "Monitor de FC BLE",
   "short_name": "FC BLE",
-  "start_url": "/HearhRateApp/?pwa=3",
+  "start_url": "/HearhRateApp/?pwa=4",
   "scope": "/HearhRateApp/",
   "display": "standalone",
   "orientation": "any",
